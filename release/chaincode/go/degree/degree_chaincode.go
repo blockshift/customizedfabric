@@ -94,7 +94,7 @@ type degree struct {
 	ObjectType string `json:"docType"` //docType is used to distinguish the various types of objects in state database
 	Degreeholder       string `json:"degreeholder"`    //the fieldtags are needed to keep case from bouncing around
 	Department         string `json:"department"`
-	Enrollmentnumber   string `json:"batch"`
+	Enrollmentnumber   string `json:"enrolment"`
         Gpa                string `json:"gpa"`
         University         string `json:"university"`  
 }
@@ -122,18 +122,18 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	fmt.Println("invoke is running " + function)
 
 	// Handle different functions
-	if function == "initDegree" { //create a new marble
-		return t.initMarble(stub, args)
-	}  else if function == "readDegree" { //read a marble
-		return t.readMarble(stub, args)
+	if function == "initDegree" { //create a newdegree
+		return t.initDegree(stub, args)
+	}  else if function == "readDegree" { //read a degree
+		return t.readDegree(stub, args)
 	} else if function == "queryDegreeByOwner" { //find marbles for owner X using rich query
-		return t.queryMarblesByOwner(stub, args)
+		return t.queryDegreeByOwner(stub, args)
 	} else if function == "queryDegrees" { //find marbles based on an ad hoc rich query
-		return t.queryMarbles(stub, args)
+		return t.queryDegrees(stub, args)
 	} else if function == "getHistoryForDegree" { //get history of values for a marble
-		return t.getHistoryForMarble(stub, args)
+		return t.getHistoryForDegree(stub, args)
 	} else if function == "getMarblesByRange" { //get marbles based on range query
-		return t.getMarblesByRange(stub, args)
+		return t.getDegreesByRange(stub, args)
 	}
 
 	fmt.Println("invoke did not find func: " + function) //error
@@ -166,7 +166,7 @@ func (t *SimpleChaincode) initDegree(stub shim.ChaincodeStubInterface, args []st
 	if len(args[3]) <= 0 {
 		return shim.Error("4th argument must be a non-empty string")
 	}
-        if len(args[4]<=0){
+        if len(args[4]) <= 0 {
                 return shim.Error("5th Argument must be non-empty string")
         } 
 	Degreeholder     := args[0]
@@ -199,7 +199,7 @@ func (t *SimpleChaincode) initDegree(stub shim.ChaincodeStubInterface, args []st
 	}
 // Index degree with respect to degree holder and enrolment and create composite key of both field
 	indexName := "degreeholderenrol"
-	holerEnrolIndexKey, err := stub.CreateCompositeKey(indexName, []string{degree.Degreeholder, marble.Degreeholder})
+	holerEnrolIndexKey, err := stub.CreateCompositeKey(indexName, []string{degree.Degreeholder, degree.Enrollmentnumber})
 	if err != nil {
 		return shim.Error(err.Error())
 	}
@@ -212,23 +212,23 @@ func (t *SimpleChaincode) initDegree(stub shim.ChaincodeStubInterface, args []st
 }
 
 // ===============================================
-// readMarble - read a marble from chaincode state
+// readDegree - read a degree from chaincode state
 // ===============================================
 func (t *SimpleChaincode) readDegree(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var name, jsonResp string
+	var enrolment, jsonResp string
 	var err error
 
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting name of the marble to query")
+		return shim.Error("Incorrect number of arguments.Please give your enrolment number to fetch degree ")
 	}
 
-	name = args[0]
-	valAsbytes, err := stub.GetState(name) //get the marble from chaincode state
+	enrolment = args[0]
+	valAsbytes, err := stub.GetState(enrolment) //get the degree from chaincode state
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to get state for " + name + "\"}"
+		jsonResp = "{\"Error\":\"Failed to get state with this enrolment number " + enrolment + "\"}"
 		return shim.Error(jsonResp)
 	} else if valAsbytes == nil {
-		jsonResp = "{\"Error\":\"Marble does not exist: " + name + "\"}"
+		jsonResp = "{\"Error\":\"Degree does not exist: " + enrolment + "\"}"
 		return shim.Error(jsonResp)
 	}
 
@@ -236,63 +236,6 @@ func (t *SimpleChaincode) readDegree(stub shim.ChaincodeStubInterface, args []st
 }
 
 
-// ===========================================================================================
-// getMarblesByRange performs a range query based on the start and end keys provided.
-
-// Read-only function results are not typically submitted to ordering. If the read-only
-// results are submitted to ordering, or if the query is used in an update transaction
-// and submitted to ordering, then the committing peers will re-execute to guarantee that
-// result sets are stable between endorsement time and commit time. The transaction is
-// invalidated by the committing peers if the result set has changed between endorsement
-// time and commit time.
-// Therefore, range queries are a safe option for performing update transactions based on query results.
-// ===========================================================================================
-func (t *SimpleChaincode) getDegreeByRange(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-
-	if len(args) < 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 2")
-	}
-
-	startKey := args[0]
-	endKey := args[1]
-
-	resultsIterator, err := stub.GetStateByRange(startKey, endKey)
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-	defer resultsIterator.Close()
-
-	// buffer is a JSON array containing QueryResults
-	var buffer bytes.Buffer
-	buffer.WriteString("[")
-
-	bArrayMemberAlreadyWritten := false
-	for resultsIterator.HasNext() {
-		queryResponse, err := resultsIterator.Next()
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-		// Add a comma before array members, suppress it for the first array member
-		if bArrayMemberAlreadyWritten == true {
-			buffer.WriteString(",")
-		}
-		buffer.WriteString("{\"Key\":")
-		buffer.WriteString("\"")
-		buffer.WriteString(queryResponse.Key)
-		buffer.WriteString("\"")
-
-		buffer.WriteString(", \"Record\":")
-		// Record is a JSON object, so we write as-is
-		buffer.WriteString(string(queryResponse.Value))
-		buffer.WriteString("}")
-		bArrayMemberAlreadyWritten = true
-	}
-	buffer.WriteString("]")
-
-	fmt.Printf("- getMarblesByRange queryResult:\n%s\n", buffer.String())
-
-	return shim.Success(buffer.Bytes())
-}
 
 // =======Rich queries =========================================================================
 // Two examples of rich queries are provided below (parameterized query and ad hoc query).
@@ -402,17 +345,17 @@ func getQueryResultForQueryString(stub shim.ChaincodeStubInterface, queryString 
 	return buffer.Bytes(), nil
 }
 
-func (t *SimpleChaincode) getHistoryForMarble(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+func (t *SimpleChaincode) getHistoryForDegree(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 
 	if len(args) < 1 {
 		return shim.Error("Incorrect number of arguments. Expecting 1")
 	}
 
-	marbleName := args[0]
+	Enrollmentnumber := args[0]
 
-	fmt.Printf("- start getHistoryForMarble: %s\n", marbleName)
+	fmt.Printf("- start getHistoryForDegree: %s\n", Enrollmentnumber)
 
-	resultsIterator, err := stub.GetHistoryForKey(marbleName)
+	resultsIterator, err := stub.GetHistoryForKey(Enrollmentnumber)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
@@ -462,7 +405,7 @@ func (t *SimpleChaincode) getHistoryForMarble(stub shim.ChaincodeStubInterface, 
 	}
 	buffer.WriteString("]")
 
-	fmt.Printf("- getHistoryForMarble returning:\n%s\n", buffer.String())
+	fmt.Printf("- getHistoryForDegree returning:\n%s\n", buffer.String())
 
 	return shim.Success(buffer.Bytes())
 }
