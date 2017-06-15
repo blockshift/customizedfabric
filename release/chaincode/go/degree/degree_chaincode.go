@@ -132,10 +132,7 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 		return t.queryDegrees(stub, args)
 	} else if function == "getHistoryForDegree" { //get history of values for a marble
 		return t.getHistoryForDegree(stub, args)
-	} else if function == "getMarblesByRange" { //get marbles based on range query
-		return t.getDegreesByRange(stub, args)
 	}
-
 	fmt.Println("invoke did not find func: " + function) //error
 	return shim.Error("Received unknown function invocation")
 }
