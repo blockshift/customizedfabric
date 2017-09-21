@@ -16,7 +16,7 @@ version: '2'
 services:
   couchdb6:
     container_name: couchdb6
-    image: hyperledger/fabric-couchdb
+    image: hyperledger/fabric-couchdb:x86_64-1.0.0-alpha2
     # Comment/Uncomment the port mapping if you want to hide/expose the CouchDB$
     # for example map it to utilize Fauxton User Interface in dev environments.
     ports:
